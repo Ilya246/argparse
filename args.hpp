@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cxxabi.h>
 #include <iostream>
 #include <map>
 #include <memory>
@@ -45,6 +46,17 @@ struct flag_argument : base_argument {
     }
 };
 
+template<typename T>
+inline const std::string type_sig = abi::__cxa_demangle(typeid(T).name(), NULL, NULL, 0);
+template<>
+inline const std::string type_sig<std::string> = "string";
+template<typename K>
+inline const std::string type_sig<std::vector<K>> = type_sig<K> + ",...," + type_sig<K>;
+template<typename... Ks>
+inline const std::string __type_sig_partial = ((type_sig<Ks> + ",") + ...);
+template<typename... Ks>
+inline const std::string type_sig<std::tuple<Ks...>> = __type_sig_partial<Ks...>.substr(0, __type_sig_partial<Ks...>.size() - 1);
+
 // add or remove a delimeter character to stream
 inline void set_delim(std::basic_ios<char>& s, char delim, bool set_to = true) {
     const auto std_ctype = std::ctype<char>::classic_table();
@@ -81,7 +93,7 @@ inline std::istream& operator>>(std::istream& stream, std::tuple<std::vector<T>&
     std::vector<T>& vec = std::get<0>(read_to);
     char delim = std::get<1>(read_to);
     if (std::get<2>(read_to)) {
-        vec.clear(); // clear beforehand since that's how >> generally behaves
+        vec.clear(); // clear beforehand if requested
     }
     std::string line;
     stream >> line;
@@ -117,14 +129,16 @@ struct value_argument : base_argument {
             val = arg.substr(equals_pos + 1);
         } else {
             ++index;
+            if (index >= argv.size()) throw std::runtime_error("No value for last value argument");
             val = argv[index];
         }
         std::istringstream read_s(val);
+        set_delim(read_s, ' ', false);
         read_s >> value;
         if (!read_s || !read_s.eof()) throw std::runtime_error("Failed to parse value for " + long_name);
     }
     std::string help() const override {
-        return "--" + long_name + "=<value>" + (alias == "" ? ": " : " (alias -" + alias + "): ") + description;
+        return "--" + long_name + "=<" + type_sig<T> + ">" + (alias == "" ? ": " : " (alias -" + alias + "): ") + description;
     }
 };
 
