@@ -1,12 +1,12 @@
 #pragma once
 
+#include "read.hpp"
+
 #include <cxxabi.h>
 #include <iostream>
 #include <map>
 #include <memory>
-#include <sstream>
 #include <string>
-#include <tuple>
 #include <vector>
 
 struct base_argument {
@@ -29,16 +29,14 @@ struct flag_argument : base_argument {
         : base_argument(long_name, alias, description), value(value) {}
 
     void parse(const std::vector<std::string>& argv, size_t& index) override {
-        std::string arg = argv[index];
+        const std::string& arg = argv[index];
 
         value = true;
         size_t equals_pos = arg.find('=');
         if (equals_pos != std::string::npos) {
-            std::istringstream read_s(arg.substr(equals_pos + 1));
-            int val_to;
-            read_s >> val_to;
-            if (!read_s || !read_s.eof()) throw std::runtime_error("Failed to parse value for " + long_name);
-            value = (bool)val_to;
+            read_stream read_s(arg.substr(equals_pos + 1));
+            read_s >> value;
+            if (read_s.fail()) throw std::runtime_error("Failed to parse value for " + long_name);
         }
     }
     std::string help() const override {
@@ -46,72 +44,6 @@ struct flag_argument : base_argument {
     }
 };
 
-template<typename T>
-inline const std::string type_sig = abi::__cxa_demangle(typeid(T).name(), NULL, NULL, 0);
-template<>
-inline const std::string type_sig<std::string> = "string";
-template<typename K>
-inline const std::string type_sig<std::vector<K>> = type_sig<K> + ",...," + type_sig<K>;
-template<typename... Ks>
-inline const std::string __type_sig_partial = ((type_sig<Ks> + ",") + ...);
-template<typename... Ks>
-inline const std::string type_sig<std::tuple<Ks...>> = __type_sig_partial<Ks...>.substr(0, __type_sig_partial<Ks...>.size() - 1);
-
-// add or remove a delimeter character to stream
-inline void set_delim(std::basic_ios<char>& s, char delim, bool set_to = true) {
-    const auto std_ctype = std::ctype<char>::classic_table();
-    std::vector<std::ctype<char>::mask> new_ctype(std_ctype, std_ctype + std::ctype<char>::table_size);
-    new_ctype[delim] ^= std::ctype_base::space * (((new_ctype[delim] & std::ctype_base::space) != 0) != set_to);
-    s.imbue(std::locale(s.getloc(), new std::ctype<char>(data(new_ctype))));
-}
-
-// read a tuple into a vector
-template<typename... Ts>
-inline std::istream& operator>>(std::istream& stream, std::tuple<std::tuple<Ts...>&, char> read_to) {
-    std::tuple<Ts...>& tuple = std::get<0>(read_to);
-    char delim = std::get<1>(read_to);
-    std::apply ([&stream, &delim](Ts&... args) {
-            std::string line;
-            stream >> line;
-            std::stringstream sstream(line);
-            set_delim(sstream, delim);
-
-            (sstream >> ... >> args);
-            if (sstream.fail()) stream.setstate(std::ios::failbit);
-        }, tuple
-    );
-    return stream;
-}
-template<typename... Ts>
-inline std::istream& operator>>(std::istream& stream, std::tuple<Ts...>& tuple) {
-    return stream >> std::tuple<std::tuple<Ts...>&, char>(tuple, ',');
-}
-
-// read a stream into a vector
-template<typename T>
-inline std::istream& operator>>(std::istream& stream, std::tuple<std::vector<T>&, char, bool> read_to) {
-    std::vector<T>& vec = std::get<0>(read_to);
-    char delim = std::get<1>(read_to);
-    if (std::get<2>(read_to)) {
-        vec.clear(); // clear beforehand if requested
-    }
-    std::string line;
-    stream >> line;
-    std::stringstream sstream(line);
-    set_delim(sstream, delim);
-
-    while (sstream && !sstream.eof()) {
-        T value;
-        sstream >> value;
-        vec.push_back(value);
-    }
-    if (sstream.fail()) stream.setstate(std::ios::failbit);
-    return stream;
-}
-template<typename T>
-inline std::istream& operator>>(std::istream& stream, std::vector<T>& vec) {
-    return stream >> std::tuple<std::vector<T>&, char, bool>(vec, ',', false);
-}
 
 template<typename T>
 struct value_argument : base_argument {
@@ -121,7 +53,7 @@ struct value_argument : base_argument {
         : base_argument(long_name, alias, description), value(value) {}
 
     void parse(const std::vector<std::string>& argv, size_t& index) override {
-        std::string arg = argv[index];
+        const std::string& arg = argv[index];
 
         std::string val;
         size_t equals_pos = arg.find('=');
@@ -132,10 +64,10 @@ struct value_argument : base_argument {
             if (index >= argv.size()) throw std::runtime_error("No value for last value argument");
             val = argv[index];
         }
-        std::istringstream read_s(val);
+        read_stream read_s(val);
         set_delim(read_s, ' ', false);
         read_s >> value;
-        if (!read_s || !read_s.eof()) throw std::runtime_error("Failed to parse value for " + long_name);
+        if (read_s.fail()) throw std::runtime_error("Failed to parse value for " + long_name);
     }
     std::string help() const override {
         return "--" + long_name + "=<" + type_sig<T> + ">" + (alias == "" ? ": " : " (alias -" + alias + "): ") + description;
