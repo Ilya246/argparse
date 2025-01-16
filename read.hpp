@@ -7,12 +7,24 @@
 #include <iostream>
 #include <vector>
 
-struct read_stream : std::istringstream {
-    using std::istringstream::basic_istringstream;
+template<typename... Ts>
+std::istream& operator>>(std::istream& stream, std::tuple<Ts...>& tuple);
 
-    read_stream& operator>> (bool& rhs) {
+template<typename T>
+std::istream& operator>>(std::istream& stream, std::vector<T>& vec);
+
+struct read_stream : std::istringstream {
+    using std::istringstream::istringstream;
+
+    template<typename T>
+    read_stream& operator>>(T& rhs) {
+        static_cast<std::istream&>(*this) >> rhs;
+        return *this;
+    }
+
+    read_stream& operator>>(bool& rhs) {
         std::string read;
-        *this >> read;
+        static_cast<std::istream&>(*this) >> read;
         if (read == "true" || (read.size() == 1 && (tolower(read[0]) == 'y' || read[0] == '1'))) {
             rhs = true;
         } else if (read == "false" || (read.size() == 1 && (tolower(read[0]) == 'n' || read[0] == '0'))) {

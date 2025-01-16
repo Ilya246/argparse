@@ -7,14 +7,14 @@ int main(int argc, char** argv) {
     std::string filename = "test";
     std::vector<std::string> values;
     std::tuple<std::string, int, bool> tup;
-    std::vector<std::tuple<std::string, int, bool>> tupvec;
+    // std::vector<std::tuple<std::string, int, bool>> tupvec; // unsupported
 
     auto args = {
         make_argument("debug", "d", "12345", debug),
         make_argument("filename", "f", "test", filename),
         make_argument("values", "v", "vector test", values),
         make_argument("tup", "t", "tuple test", tup),
-        make_argument("tupvec", "tv", "tuple vector test", tupvec)
+        // make_argument("tupvec", "tv", "tuple vector test", tupvec)
     };
     parse_arguments(args, argc, argv);
 
@@ -28,9 +28,10 @@ int main(int argc, char** argv) {
 
     std::cout << "tup " << std::get<0>(tup) << " " << std::get<1>(tup) << " " << std::get<2>(tup) << std::endl;
 
+    /* unsupported
     for (const auto& t : tupvec) {
         std::cout << "t " << std::get<0>(t) << " " << std::get<1>(t) << " " << std::get<2>(t) << std::endl;
-    }
+    } */
 
     return 0;
 }
