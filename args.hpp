@@ -6,8 +6,11 @@
 #include <iostream>
 #include <map>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <vector>
+
+namespace argp {
 
 struct base_argument {
     std::string long_name;
@@ -22,65 +25,71 @@ struct base_argument {
     virtual std::string help() const = 0;
 };
 
-struct flag_argument : base_argument {
-    bool& value;
-
-    flag_argument(std::string long_name, std::string alias, std::string description, bool& value)
-        : base_argument(long_name, alias, description), value(value) {}
-
-    void parse(const std::vector<std::string>& argv, size_t& index) override {
-        const std::string& arg = argv[index];
-
-        value = true;
-        size_t equals_pos = arg.find('=');
-        if (equals_pos != std::string::npos) {
-            read_stream read_s(arg.substr(equals_pos + 1));
-            read_s >> value;
-            if (read_s.fail()) throw std::runtime_error("Failed to parse value for " + long_name);
-        }
-    }
-    std::string help() const override {
-        return "--" + long_name + (alias == "" ? ": " : " (alias -" + alias + "): ") + description;
-    }
+struct parse_error : std::runtime_error {
+    using std::runtime_error::runtime_error;
 };
-
 
 template<typename T>
 struct value_argument : base_argument {
     T& value;
+    T default_value;
+    bool has_default = false;
 
-    value_argument(std::string long_name, std::string alias, std::string description, T& value)
-        : base_argument(long_name, alias, description), value(value) {}
+    value_argument(std::string long_name, std::string alias, std::string description, T& a_value)
+        : base_argument(long_name, alias, description), value(a_value) {}
 
+    value_argument(std::string long_name, std::string alias, std::string description, T& a_value, const T& a_default_value)
+        : base_argument(long_name, alias, description), value(a_value), default_value(a_default_value), has_default(true) {}
+
+    // parse argument: may seek forward, index will be set to latest element parsed
     void parse(const std::vector<std::string>& argv, size_t& index) override {
-        const std::string& arg = argv[index];
+        std::string_view arg = argv[index];
 
-        std::string val;
+        std::string_view val_str;
         size_t equals_pos = arg.find('=');
+        // --arg=val
         if (equals_pos != std::string::npos) {
-            val = arg.substr(equals_pos + 1);
+            val_str = arg.substr(equals_pos + 1);
+        // --arg val
         } else {
             ++index;
-            if (index >= argv.size()) throw std::runtime_error("No value for last value argument");
-            val = argv[index];
+            bool has_value = index < argv.size() && (val_str = argv[index]).size() > 0 && val_str[0] != '-';
+            if (!has_value && has_default) {
+                // after us is end or another arg, check if we have a default
+                if (has_default) {
+                    value = default_value;
+                    return;
+                }
+                // no default
+                else throw parse_error("No value for argument " + std::string(arg));
+            }
         }
-        read_stream read_s(val);
-        set_delim(read_s, ' ', false);
-        read_s >> value;
-        if (read_s.fail()) throw std::runtime_error("Failed to parse value for " + long_name);
+
+        try {
+            value = parse_value<T>(val_str);
+        } catch (const std::runtime_error& e) {
+            throw parse_error("Failed to parse value for " + std::string(arg) + ": " + e.what());
+        }
     }
+
     std::string help() const override {
-        return "--" + long_name + "=<" + type_sig<T> + ">" + (alias == "" ? ": " : " (alias -" + alias + "): ") + description;
+        // --arg=T (alias -a): does something
+        return "--" + long_name + "=" + type_sig<T> + (alias == "" ? " " : " (alias -" + alias + "): ") + description;
     }
 };
-
-inline std::shared_ptr<base_argument> make_argument(std::string long_name, std::string alias, std::string description, bool& value) {
-    return std::make_shared<flag_argument>(long_name, alias, description, value);
-}
 
 template<typename T>
 inline std::shared_ptr<base_argument> make_argument(std::string long_name, std::string alias, std::string description, T& value) {
     return std::make_shared<value_argument<T>>(long_name, alias, description, value);
+}
+template<typename T>
+inline std::shared_ptr<base_argument> make_argument(std::string long_name, std::string alias, std::string description, T& value, T default_value) {
+    return std::make_shared<value_argument<T>>(long_name, alias, description, value, default_value);
+}
+// make bools have a default of true if unspecified
+template<>
+inline std::shared_ptr<base_argument> make_argument<bool>(std::string long_name, std::string alias, std::string description, bool& value) {
+    return std::make_shared<value_argument<bool>>(long_name, alias, description, value, true);
 }
 
 inline void parse_arguments(const std::vector<std::shared_ptr<base_argument>>& args, int argc, char* argv[]) {
@@ -114,16 +123,23 @@ inline void parse_arguments(const std::vector<std::shared_ptr<base_argument>>& a
             arg = arg.substr(0, equals_pos);
         }
         if (arg_map.count(arg) != 0) {
-            arg_map[arg]->parse(argv_str, i);
+            try {
+                arg_map[arg]->parse(argv_str, i);
+            } catch (const parse_error& e) {
+                errors += std::string(e.what()) + '\n';
+                errored = true;
+            }
         } else {
             errors += "Unknown argument: " + arg + '\n';
             errored = true;
         }
     }
     if (do_help) {
+        std::cout << "All flags: " << '\n';
         for (const std::shared_ptr<base_argument>& a : args) {
-            std::cout << a->help() << std::endl;
+            std::cout << "  " << a->help() << '\n';
         }
+        std::flush(std::cout);
     }
     if (errored) {
         std::cerr << "Couldn't parse arguments:\n" << errors;
@@ -132,3 +148,4 @@ inline void parse_arguments(const std::vector<std::shared_ptr<base_argument>>& a
     if (do_help) exit(0);
 }
 
+}

@@ -7,16 +7,18 @@ int main(int argc, char** argv) {
     std::string filename = "test";
     std::vector<std::string> values;
     std::tuple<std::string, int, bool> tup;
-    // std::vector<std::tuple<std::string, int, bool>> tupvec; // unsupported
+    std::tuple<std::string, std::tuple<int, std::string, bool>, bool, int> tuptup;
+    std::vector<std::tuple<std::string, int, bool>> tupvec; // unsupported
 
     auto args = {
-        make_argument("debug", "d", "12345", debug),
-        make_argument("filename", "f", "test", filename),
-        make_argument("values", "v", "vector test", values),
-        make_argument("tup", "t", "tuple test", tup),
-        // make_argument("tupvec", "tv", "tuple vector test", tupvec)
+        argp::make_argument("debug", "d", "12345", debug),
+        argp::make_argument("filename", "f", "test", filename),
+        argp::make_argument("values", "v", "vector test", values),
+        argp::make_argument("tup", "t", "tuple test", tup),
+        argp::make_argument("tuptup", "tt", "tuple tuple test", tuptup),
+        argp::make_argument("tupvec", "tv", "tuple vector test", tupvec)
     };
-    parse_arguments(args, argc, argv);
+    argp::parse_arguments(args, argc, argv);
 
     std::cout << "debug " << debug << " default " << 0 << std::endl;
 
@@ -26,7 +28,17 @@ int main(int argc, char** argv) {
     for (const std::string& s : values) std::cout << s << ",";
     std::cout << std::endl;
 
-    std::cout << "tup " << std::get<0>(tup) << " " << std::get<1>(tup) << " " << std::get<2>(tup) << std::endl;
+    std::cout << "tup " << std::get<0>(tup)
+    << " " << std::get<1>(tup)
+    << " " << std::get<2>(tup)
+    << std::endl;
+
+    std::cout << "tuptup " << std::get<0>(tuptup)
+    << " " << std::get<0>(std::get<1>(tuptup))
+    << " " << std::get<1>(std::get<1>(tuptup))
+    << " " << std::get<2>(std::get<1>(tuptup))
+    << " " << std::get<2>(tuptup)
+    << " " << std::get<3>(tuptup) << std::endl;
 
     /* unsupported
     for (const auto& t : tupvec) {
