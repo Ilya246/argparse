@@ -1,14 +1,15 @@
 #pragma once
 
 #include <cxxabi.h>
-#ifdef ARGP_DEBUG
-#include <iostream>
-#endif
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <tuple>
 #include <vector>
+
+#ifdef ARGP_DEBUG
+#include <iostream>
+#endif
 
 namespace argp {
 
@@ -47,8 +48,13 @@ inline T __default_read(std::string_view in_str) {
     return val;
 }
 
+template<typename T> struct is_container : std::false_type {};
+template<typename... Args> struct is_container<std::tuple<Args...>> : std::true_type {};
+template<typename K> struct is_container<std::vector<K>> : std::true_type {};
+
 template<typename T> struct is_tuple : std::false_type {};
 template<typename... Args> struct is_tuple<std::tuple<Args...>> : std::true_type {};
+
 template<typename T> struct is_vector : std::false_type {};
 template<typename K> struct is_vector<std::vector<K>> : std::true_type {};
 
@@ -73,33 +79,38 @@ inline bool parse_value<>(std::string_view in_str) {
 }
 
 // finds the separator that bounds this element in a container
-inline std::size_t find_next_sep(std::string_view in_str, size_t prev_sep) {
-    if (in_str.size() - prev_sep - 1 == 0) return std::string::npos;
+inline std::size_t find_next_sep(std::string_view in_str, size_t prev_sep, bool find_nested = false) {
+    if (in_str.size() - 1 <= prev_sep) return std::string::npos;
+
     #ifdef ARGP_DEBUG
     std::cout << "reading sep in `" << in_str.substr(prev_sep + 1) << "`" << std::endl;
     #endif
+
     size_t next_sep_pos = in_str.find(',', prev_sep + 1);
     if (next_sep_pos == std::string::npos) {
-        next_sep_pos = in_str.find(collection_close, prev_sep + 1);
-        if (next_sep_pos == std::string::npos) throw std::runtime_error("container lacks closing bracket");
+        next_sep_pos = in_str.rfind(collection_close, std::string::npos);
+        if (next_sep_pos == std::string::npos || next_sep_pos <= prev_sep) throw std::runtime_error("container lacks closing bracket");
     }
-    size_t n_read_pos = in_str.find(collection_open, prev_sep + 1);
-    // we're reading a nested structure, there's a { before any other separator
-    if (n_read_pos != std::string::npos && n_read_pos < next_sep_pos) {
-        size_t b_level = 1;
-        while (b_level != 0) {
-            size_t i_open_pos = in_str.find(collection_open, n_read_pos + 1);
-            size_t i_close_pos = in_str.find(collection_close, n_read_pos + 1);
-            if (i_close_pos == std::string::npos) throw std::runtime_error("container nested structure lacks closing bracket");
-            // find the closest bracket and see if we went deeper or shallower
-            if (i_close_pos < i_open_pos || i_open_pos == std::string::npos) {
-                n_read_pos = i_close_pos;
-                --b_level;
-            } else {
-                n_read_pos = i_open_pos;
-                ++b_level;
+
+    if (find_nested) {
+        size_t n_read_pos = in_str.find(collection_open, prev_sep + 1);
+        // we're reading a nested structure, there's a { before any other separator
+        if (n_read_pos != std::string::npos && n_read_pos < next_sep_pos) {
+            size_t b_level = 1;
+            while (b_level != 0) {
+                size_t i_open_pos = in_str.find(collection_open, n_read_pos + 1);
+                size_t i_close_pos = in_str.find(collection_close, n_read_pos + 1);
+                if (i_close_pos == std::string::npos) throw std::runtime_error("container nested structure lacks closing bracket");
+                // find the closest bracket and see if we went deeper or shallower
+                if (i_close_pos < i_open_pos || i_open_pos == std::string::npos) {
+                    n_read_pos = i_close_pos;
+                    --b_level;
+                } else {
+                    n_read_pos = i_open_pos;
+                    ++b_level;
+                }
+                next_sep_pos = i_close_pos + 1;
             }
-            next_sep_pos = i_close_pos + 1;
         }
     }
     return next_sep_pos;
@@ -119,19 +130,19 @@ inline T __parse_tuple(std::string_view in_str) {
             if (in_str[0] != collection_open) throw std::runtime_error("tuple lacks opening bracket");
             auto parse = [&index, &in_str, &prev_sep](auto& x) {
                 // read until next separator
-                size_t next_sep_pos = find_next_sep(in_str, prev_sep);
-                std::string_view r_view = in_str.substr(prev_sep + 1, next_sep_pos - prev_sep - 1);
+                size_t next_sep_pos = find_next_sep(in_str, prev_sep, is_container<typeof x>::value);
+                if (next_sep_pos == std::string::npos) throw std::runtime_error("found " + std::to_string(index) + " elements while reading tuple with " + std::to_string(sizeof...(args)) + " elements");
                 #ifdef ARGP_DEBUG
-                std::cout << "reading <" << type_sig<typeof x> << "> from `" << r_view << "`: prev " << prev_sep << " next sep " << next_sep_pos << std::endl;
+                std::cout << "reading <" << type_sig<typeof x> << "> from `" << in_str.substr(prev_sep + 1) << "`, next sep " << next_sep_pos << std::endl;
                 #endif
+                std::string_view r_view = in_str.substr(prev_sep + 1, next_sep_pos - prev_sep - 1);
 
                 x = parse_value<typeof x>(r_view);
                 prev_sep = next_sep_pos;
                 ++index;
             };
             (parse(args), ...);
-
-            if (index != sizeof...(args)) throw std::runtime_error("found " + std::to_string(index) + " elements while reading tuple with " + std::to_string(sizeof...(args)) + " elements");
+            if (prev_sep != in_str.size() - 1) throw std::runtime_error("tuple has too many elements");
         }, read_tup
     );
     return read_tup;
@@ -149,7 +160,7 @@ inline T __parse_vector(std::string_view in_str) {
     std::size_t prev_sep = 0;
     while (true) {
         // read until next separator
-        size_t next_sep_pos = find_next_sep(in_str, prev_sep);
+        size_t next_sep_pos = find_next_sep(in_str, prev_sep, is_container<typename T::value_type>::value);
         if (next_sep_pos == std::string::npos)
             return read_vec;
 
