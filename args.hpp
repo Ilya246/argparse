@@ -132,7 +132,11 @@ inline void parse_arguments(const std::vector<std::shared_ptr<base_argument>>& a
         } else {
             errors += "Unknown argument: " + arg + '\n';
             errored = true;
+            do_help = true;
         }
+    }
+    if (errored) {
+        std::cerr << "Couldn't parse arguments:\n" << errors;
     }
     if (do_help) {
         std::cout << "All flags: " << '\n';
@@ -141,11 +145,7 @@ inline void parse_arguments(const std::vector<std::shared_ptr<base_argument>>& a
         }
         std::flush(std::cout);
     }
-    if (errored) {
-        std::cerr << "Couldn't parse arguments:\n" << errors;
-        exit(1);
-    }
-    if (do_help) exit(0);
+    if (errored || do_help) exit(errored);
 }
 
 }
