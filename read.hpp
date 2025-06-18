@@ -130,14 +130,14 @@ inline T __parse_tuple(std::string_view in_str) {
             if (in_str[0] != collection_open) throw std::runtime_error("tuple lacks opening bracket");
             auto parse = [&index, &in_str, &prev_sep](auto& x) {
                 // read until next separator
-                size_t next_sep_pos = find_next_sep(in_str, prev_sep, is_container<typeof x>::value);
+                size_t next_sep_pos = find_next_sep(in_str, prev_sep, is_container<__typeof__ x>::value);
                 if (next_sep_pos == std::string::npos) throw std::runtime_error("found " + std::to_string(index) + " elements while reading tuple with " + std::to_string(sizeof...(args)) + " elements");
                 #ifdef ARGP_DEBUG
-                std::cout << "reading <" << type_sig<typeof x> << "> from `" << in_str.substr(prev_sep + 1) << "`, next sep " << next_sep_pos << std::endl;
+                std::cout << "reading <" << type_sig<__typeof__ x> << "> from `" << in_str.substr(prev_sep + 1) << "`, next sep " << next_sep_pos << std::endl;
                 #endif
                 std::string_view r_view = in_str.substr(prev_sep + 1, next_sep_pos - prev_sep - 1);
 
-                x = parse_value<typeof x>(r_view);
+                x = parse_value<__typeof__ x>(r_view);
                 prev_sep = next_sep_pos;
                 ++index;
             };
