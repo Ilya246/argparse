@@ -54,6 +54,7 @@ struct value_argument : base_argument {
         } else {
             ++index;
             bool has_value = index < argv.size() && (val_str = argv[index]).size() > 0 && val_str[0] != '-';
+            if (!has_value) --index;
             if (!has_value && has_default) {
                 // after us is end or another arg, check if we have a default
                 if (has_default) {
