@@ -18,7 +18,14 @@ int main(int argc, char** argv) {
         argp::make_argument("tuptup", "tt", "tuple tuple test", tuptup),
         argp::make_argument("tupvec", "tv", "tuple vector test", tupvec)
     };
-    argp::parse_arguments(args, argc, argv);
+    argp::parse_arguments(args, argc, argv,
+                          "Argparse test program\n"
+                          "  Usage:\n"
+                          "    run with args to test whether their values get properly set\n"
+                          "    example: ./test --tup=[abc,3,f] --filename=debug",
+
+                          "Post-help test test\n"
+                          "  Test: test");
 
     std::cout << "debug " << debug << " default " << 0 << std::endl;
 

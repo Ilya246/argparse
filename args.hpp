@@ -92,7 +92,7 @@ inline std::shared_ptr<base_argument> make_argument<bool>(std::string long_name,
     return std::make_shared<value_argument<bool>>(long_name, alias, description, value, true);
 }
 
-inline void parse_arguments(const std::vector<std::shared_ptr<base_argument>>& args, int argc, char* argv[]) {
+inline void parse_arguments(const std::vector<std::shared_ptr<base_argument>>& args, int argc, char* argv[], std::string pre_help = "", std::string post_help = "") {
     std::vector<std::string> argv_str(argv, argv + argc);
     std::map<std::string, std::shared_ptr<base_argument>> arg_map;
     for (const std::shared_ptr<base_argument>& a : args) {
@@ -139,9 +139,15 @@ inline void parse_arguments(const std::vector<std::shared_ptr<base_argument>>& a
         std::cerr << "Couldn't parse arguments:\n" << errors;
     }
     if (do_help) {
+        if (!pre_help.empty()) {
+            std::cout << pre_help << '\n';
+        }
         std::cout << "All flags: " << '\n';
         for (const std::shared_ptr<base_argument>& a : args) {
             std::cout << "  " << a->help() << '\n';
+        }
+        if (!post_help.empty()) {
+            std::cout << post_help << '\n';
         }
         std::flush(std::cout);
     }
