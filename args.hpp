@@ -68,7 +68,7 @@ struct value_argument : base_argument {
 
         try {
             value = parse_value<T>(val_str);
-        } catch (const std::runtime_error& e) {
+        } catch (const read_error& e) {
             throw parse_error("Failed to parse value for " + std::string(arg) + ": " + e.what());
         }
     }
