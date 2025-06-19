@@ -80,16 +80,16 @@ struct value_argument : base_argument {
 };
 
 template<typename T>
-inline std::shared_ptr<base_argument> make_argument(std::string long_name, std::string alias, std::string description, T& value) {
+inline std::shared_ptr<value_argument<T>> make_argument(std::string long_name, std::string alias, std::string description, T& value) {
     return std::make_shared<value_argument<T>>(long_name, alias, description, value);
 }
 template<typename T>
-inline std::shared_ptr<base_argument> make_argument(std::string long_name, std::string alias, std::string description, T& value, T default_value) {
+inline std::shared_ptr<value_argument<T>> make_argument(std::string long_name, std::string alias, std::string description, T& value, T default_value) {
     return std::make_shared<value_argument<T>>(long_name, alias, description, value, default_value);
 }
 // make bools have a default of true if unspecified
 template<>
-inline std::shared_ptr<base_argument> make_argument<bool>(std::string long_name, std::string alias, std::string description, bool& value) {
+inline std::shared_ptr<value_argument<bool>> make_argument<bool>(std::string long_name, std::string alias, std::string description, bool& value) {
     return std::make_shared<value_argument<bool>>(long_name, alias, description, value, true);
 }
 

@@ -48,7 +48,11 @@ inline T __default_read(std::string_view in_str) {
     std::istringstream read_ss((std::string)in_str);
     T val;
     read_ss >> val;
+    #ifdef ARGP_DEBUG
+    std::cout << "[ARGP-D] using default read: stream state is " << read_ss.flags() << std::endl;
+    #endif
     if (!read_ss.eof()) throw read_error("didn't EOF while reading value (" + (std::string)in_str + ")");
+    if (!read_ss) throw read_error("error while reading value (" + (std::string)in_str + ")");
     return val;
 }
 
@@ -64,6 +68,9 @@ template<typename K> struct is_vector<std::vector<K>> : std::true_type {};
 
 template<typename T>
 inline T parse_value(std::string_view in_str) {
+    #ifdef ARGP_DEBUG
+    std::cout << "[ARGP-D] parsing value `" << in_str << "` as " << type_sig<T> << std::endl;
+    #endif
     if constexpr (is_tuple<T>::value) return __parse_tuple<T>(in_str);
     else if constexpr (is_vector<T>::value) return __parse_vector<T>(in_str);
     else return __default_read<T>(in_str);
@@ -87,7 +94,7 @@ inline std::size_t find_next_sep(std::string_view in_str, size_t prev_sep, bool 
     if (in_str.size() - 1 <= prev_sep) return std::string::npos;
 
     #ifdef ARGP_DEBUG
-    std::cout << "reading sep in `" << in_str.substr(prev_sep + 1) << "`" << std::endl;
+    std::cout << "[ARGP-D] reading sep in `" << in_str.substr(prev_sep + 1) << "`" << std::endl;
     #endif
 
     size_t next_sep_pos = in_str.find(',', prev_sep + 1);
@@ -137,7 +144,7 @@ inline T __parse_tuple(std::string_view in_str) {
                 size_t next_sep_pos = find_next_sep(in_str, prev_sep, is_container<__typeof__ x>::value);
                 if (next_sep_pos == std::string::npos) throw read_error("found " + std::to_string(index) + " elements while reading tuple with " + std::to_string(sizeof...(args)) + " elements");
                 #ifdef ARGP_DEBUG
-                std::cout << "reading <" << type_sig<__typeof__ x> << "> from `" << in_str.substr(prev_sep + 1) << "`, next sep " << next_sep_pos << std::endl;
+                std::cout << "[ARGP-D] reading <" << type_sig<__typeof__ x> << "> from `" << in_str.substr(prev_sep + 1) << "`, next sep " << next_sep_pos << std::endl;
                 #endif
                 std::string_view r_view = in_str.substr(prev_sep + 1, next_sep_pos - prev_sep - 1);
 
@@ -170,7 +177,7 @@ inline T __parse_vector(std::string_view in_str) {
 
         std::string_view r_view = in_str.substr(prev_sep + 1, next_sep_pos - prev_sep - 1);
         #ifdef ARGP_DEBUG
-        std::cout << "reading <" << type_sig<typename T::value_type> << "> from `" << r_view << "`: prev " << prev_sep << " next sep " << next_sep_pos << std::endl;
+        std::cout << "[ARGP-D] reading <" << type_sig<typename T::value_type> << "> from `" << r_view << "`: prev " << prev_sep << " next sep " << next_sep_pos << std::endl;
         #endif
 
         read_vec.push_back(parse_value<typename T::value_type>(r_view));
